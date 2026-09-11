@@ -82,6 +82,7 @@
   .trust-pick.active{background:var(--accent); color:#fff; font-weight:bold; border-color:var(--accent);}
 
   textarea{width:100%; min-height:56px; border:none; resize:vertical; font-size:14px; font-family:inherit;}
+  #topicScenarioInput{min-height:32px; border:none; margin-top:2px; width:100%; resize:vertical; font-family:inherit; font-size:14px;}
   .qual-block{margin-bottom:2px;}
   .qual-block .label{font-weight:bold; margin:6px 0 2px;}
 
@@ -174,6 +175,7 @@
   <table>
     <tr><td class="section-title" colspan="1">1.主題：<span id="topicTitle"></span></td></tr>
     <tr><td>2.情境說明：<span id="topicScenario"></span></td></tr>
+    <tr id="scenarioExtraRow" style="display:none;"><td>情境：<textarea id="topicScenarioInput" placeholder="請依現場實際狀況填寫"></textarea></td></tr>
   </table>
 
   <div class="table-scroll">
@@ -322,6 +324,16 @@ function loadTopic(key){
   document.getElementById('topicTitle').textContent = topic.title;
   document.getElementById('topicScenario').textContent = topic.scenario;
 
+  const extraRow = document.getElementById('scenarioExtraRow');
+  const scenarioInput = document.getElementById('topicScenarioInput');
+  if(topic.scenarioEditable){
+    extraRow.style.display = 'table-row';
+    scenarioInput.value = '';
+  } else {
+    extraRow.style.display = 'none';
+    scenarioInput.value = '';
+  }
+
   const body = document.getElementById('itemsBody');
   body.innerHTML = '';
   topic.items.forEach((text, idx)=>{
@@ -404,6 +416,7 @@ function collectFormData(status){
     "教師姓名": document.getElementById('f_teacher').value,
     "主題代碼": topic.code,
     "主題名稱": topic.title,
+    "情境內容": topic.scenarioEditable ? document.getElementById('topicScenarioInput').value : "",
     "信賴等級": trustLevel ? String(trustLevel) : "",
     "值得嘉許": document.getElementById('q1').value,
     "可再精進": document.getElementById('q2').value,
@@ -532,6 +545,11 @@ async function loadRecord(id){
     currentRecordStatus = rec['狀態'];
 
     loadTopic(rec['主題代碼']);
+    if(TOPICS[rec['主題代碼']] && TOPICS[rec['主題代碼']].scenarioEditable && rec['情境內容']){
+      const si = document.getElementById('topicScenarioInput');
+      si.value = rec['情境內容'];
+      autoGrowTextarea(si);
+    }
     document.getElementById('f_date').value = rec['填寫日期'] || todayISO();
     document.getElementById('f_student').value = rec['學員姓名'] || '';
     document.getElementById('f_term').value = rec['期程'] || '';
@@ -580,12 +598,12 @@ function autoGrowTextarea(el){
   el.style.height = 'auto';
   el.style.height = (el.scrollHeight + 2) + 'px';
 }
-['q1','q2','q3'].forEach(id=>{
+['q1','q2','q3','topicScenarioInput'].forEach(id=>{
   const el = document.getElementById(id);
   el.addEventListener('input', ()=> autoGrowTextarea(el));
 });
 window.addEventListener('beforeprint', ()=>{
-  ['q1','q2','q3'].forEach(id=> autoGrowTextarea(document.getElementById(id)));
+  ['q1','q2','q3','topicScenarioInput'].forEach(id=> autoGrowTextarea(document.getElementById(id)));
 });
 
 </script>
