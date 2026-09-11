@@ -144,8 +144,8 @@
   <select id="topicSelect"></select>
   <div class="spacer"></div>
   <button class="ghost" onclick="showSearchView()">🔍 查詢歷史</button>
-  <button class="secondary" onclick="submitForm('草稿')">暫存草稿</button>
-  <button class="primary" onclick="submitForm('正式')">正式送出</button>
+  <button class="secondary" id="btnDraft" onclick="submitForm('草稿')">暫存草稿</button>
+  <button class="primary" id="btnFinal" onclick="submitForm('正式')">正式送出</button>
   <button class="ghost" onclick="window.print()">列印 / 存PDF</button>
 </div>
 
@@ -495,10 +495,14 @@ function showSearchView(){
   document.getElementById('sheet').style.display = 'none';
   document.getElementById('statusbar').classList.remove('show');
   document.getElementById('searchView').style.display = 'block';
+  document.getElementById('btnDraft').style.display = 'none';
+  document.getElementById('btnFinal').style.display = 'none';
 }
 function hideSearchView(){
   document.getElementById('searchView').style.display = 'none';
   document.getElementById('sheet').style.display = 'block';
+  document.getElementById('btnDraft').style.display = '';
+  document.getElementById('btnFinal').style.display = '';
   if(currentRecordId) showStatusbar();
 }
 
