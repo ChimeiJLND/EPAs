@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>共通照護EPAs 評估表單</title>
+<style>
+  :root{
+    --border:#000;
+    --gray:#f5f5f5;
+    --accent:#2c5f8a;
+    --accent-light:#e8f1f8;
+  }
+  *{box-sizing:border-box;}
+  body{
+    font-family:"Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif;
+    margin:0; background:#eef1f4; color:#222;
+  }
+  /* ---------- 上方工具列（填寫模式用，列印時隱藏） ---------- */
+  .toolbar{
+    position:sticky; top:0; z-index:20;
+    background:#fff; border-bottom:1px solid #ddd;
+    padding:10px 14px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+  }
+  .toolbar select, .toolbar button, .toolbar input{
+    font-size:14px; padding:8px 10px; border-radius:8px; border:1px solid #ccc;
+  }
+  .toolbar button{cursor:pointer; background:#fff;}
+  .toolbar button.primary{ background:var(--accent); color:#fff; border-color:var(--accent); font-weight:bold; }
+  .toolbar button.secondary{ background:#fff3cd; border-color:#e0c46c; font-weight:bold; }
+  .toolbar button.ghost{ background:#fff; }
+  .toolbar .title{font-weight:bold; font-size:16px; margin-right:6px;}
+  .toolbar .spacer{flex:1 1 auto;}
+
+  .statusbar{
+    max-width:820px; margin:10px auto 0; padding:8px 14px; font-size:13px;
+    background:#fff8e1; border:1px solid #f0d98a; border-radius:6px; display:none;
+    align-items:center; gap:10px; flex-wrap:wrap;
+  }
+  .statusbar.show{display:flex;}
+  .statusbar button{font-size:12px; padding:4px 10px; border-radius:6px; border:1px solid #ccc; background:#fff; cursor:pointer;}
+
+  /* ---------- 表單容器 ---------- */
+  .sheet{
+    max-width:820px; margin:16px auto; background:#fff;
+    padding:22px; border-radius:6px; box-shadow:0 1px 4px rgba(0,0,0,.1);
+  }
+  .hospital{text-align:center; font-weight:bold; font-size:18px; margin:4px 0;}
+  .formtitle{text-align:center; font-weight:bold; font-size:17px; margin:4px 0 14px;}
+  .headrow{display:flex; flex-wrap:wrap; gap:10px 18px; font-size:14px; margin-bottom:14px;}
+  .headrow label{display:flex; align-items:center; gap:6px; white-space:nowrap;}
+  .headrow input{border:none; border-bottom:1px solid #999; padding:4px 2px; font-size:14px; width:110px;}
+  .headrow select{border:none; border-bottom:1px solid #999; padding:4px 2px; font-size:14px; background:#fff;}
+
+  table{width:100%; border-collapse:collapse; margin-bottom:6px;}
+  th,td{border:1px solid var(--border); padding:8px; font-size:14px; vertical-align:middle;}
+  .section-title{font-weight:bold; background:var(--gray);}
+  .item-row td:first-child{width:46%;}
+
+  .rate-cell{cursor:pointer; padding:9px 3px; text-align:center; font-size:12.5px; user-select:none;
+    border:1px solid #bbb; border-radius:6px; background:#fafafa; margin:4px;}
+  .rate-cell.active{background:var(--accent); color:#fff; font-weight:bold; border-color:var(--accent);}
+  th.rate-head, td.rate-head{text-align:center; font-weight:bold; font-size:13px;}
+
+  .level-box{margin:14px 0; padding:10px; background:var(--accent-light); border-radius:6px; font-size:14px;}
+  .level-auto{font-weight:bold; color:var(--accent);}
+
+  .trust-table td{text-align:center;}
+  .trust-pick{cursor:pointer; padding:8px 4px; text-align:center; user-select:none;
+    border:1px solid #bbb; border-radius:6px; background:#fafafa; margin:4px;}
+  .trust-pick.active{background:var(--accent); color:#fff; font-weight:bold; border-color:var(--accent);}
+
+  textarea{width:100%; min-height:56px; border:none; resize:vertical; font-size:14px; font-family:inherit;}
+  .qual-block{margin-bottom:2px;}
+  .qual-block .label{font-weight:bold; margin:6px 0 2px;}
+
+  .siglabel{display:flex; justify-content:space-between; margin-top:18px; font-size:14px; flex-wrap:wrap; gap:10px;}
+  .siglabel input{border:none; border-bottom:1px solid #999; padding:2px 4px; font-size:14px; width:130px;}
+
+  .hint{font-size:12px; color:#888; margin-top:2px;}
+
+  /* ---------- 查詢頁面 ---------- */
+  .search-filters{display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px;}
+  .search-filters label{display:flex; flex-direction:column; font-size:12px; color:#555; gap:3px;}
+  .search-filters input, .search-filters select{font-size:14px; padding:6px 8px; border:1px solid #ccc; border-radius:6px;}
+  .result-row{
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+    padding:10px 12px; border:1px solid #ddd; border-radius:8px; margin-bottom:8px; cursor:pointer;
+    flex-wrap:wrap;
+  }
+  .result-row:hover{background:var(--accent-light);}
+  .result-row .tag{font-size:11px; padding:2px 8px; border-radius:10px; background:#eee;}
+  .result-row .tag.draft{background:#fff3cd; color:#8a6d00;}
+  .result-row .tag.final{background:#d4edda; color:#155724;}
+  .empty-hint{color:#999; font-size:14px; text-align:center; padding:20px 0;}
+
+  /* ---------- 列印樣式：還原原始 Word 版面 ---------- */
+  @media print{
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body{background:#fff;}
+    .toolbar, .statusbar, #searchView{display:none !important;}
+    .sheet{box-shadow:none; margin:0; max-width:100%; padding:0;}
+    table, th, td{border:1px solid #000 !important; border-collapse:collapse !important;}
+    tr, .item-row, .qual-block{page-break-inside:avoid; break-inside:avoid;}
+    .feedback-table{page-break-inside:avoid; break-inside:avoid;}
+    .rate-cell{font-size:0 !important; padding:2px; margin:0 !important; border:none !important; background:none !important;}
+    .rate-cell.active{background:none !important; color:#000 !important;}
+    .rate-cell.active::after{content:"✓"; font-size:16px; font-weight:bold;}
+    .trust-pick{font-size:0 !important; padding:6px; margin:0 !important; border:none !important; background:none !important;}
+    .trust-pick.active{background:none !important; color:#000 !important;}
+    .trust-pick.active::after{content:"✓"; font-size:16px; font-weight:bold;}
+    .level-box{background:none; padding:0;}
+    textarea{border:none; resize:none; overflow:hidden;}
+    @page{ size:A4; margin:14mm; }
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <a href="index.html" class="title" style="text-decoration:none; color:inherit;">📋 EPA 評估表單</a>
+  <select id="topicSelect"></select>
+  <div class="spacer"></div>
+  <button class="ghost" onclick="showSearchView()">🔍 查詢歷史</button>
+  <button class="secondary" onclick="submitForm('草稿')">暫存草稿</button>
+  <button class="primary" onclick="submitForm('正式')">正式送出</button>
+  <button class="ghost" onclick="window.print()">列印 / 存PDF</button>
+</div>
+
+<div class="statusbar" id="statusbar">
+  <span id="statusbarText"></span>
+  <button onclick="newForm()">＋ 開始新填寫</button>
+</div>
+
+<div class="sheet" id="sheet">
+  <div class="hospital">奇美醫療財團法人佳里奇美醫院</div>
+  <div class="formtitle">護理部臨床照護評估表單（EPA Ad-hoc）</div>
+
+  <div class="headrow">
+    <label>日期：<input type="date" id="f_date"></label>
+    <label>學員：<input type="text" id="f_student" placeholder="姓名"></label>
+    <label>期程：
+      <select id="f_term">
+        <option value="">請選擇</option>
+        <option value="三個月">三個月</option>
+        <option value="九個月">九個月</option>
+        <option value="十二個月">十二個月</option>
+      </select>
+    </label>
+    <label>教師：<input type="text" id="f_teacher" placeholder="姓名"></label>
+  </div>
+
+  <table>
+    <tr><td class="section-title" colspan="1">1.主題：<span id="topicTitle"></span></td></tr>
+    <tr><td>2.情境說明：<span id="topicScenario"></span></td></tr>
+  </table>
+
+  <table>
+    <tr>
+      <td class="section-title" style="width:46%;">3.評估項目</td>
+      <td class="section-title rate-head">未執行</td>
+      <td class="section-title rate-head">在旁協助</td>
+      <td class="section-title rate-head">事後確認</td>
+      <td class="section-title rate-head">獨立執行</td>
+    </tr>
+    <tbody id="itemsBody"></tbody>
+  </table>
+
+  <div class="level-box">
+    <div><b>4.整體任務評估：</b></div>
+    <div class="hint">獨立執行 0-5項→Level1／6項→Level2／7項→Level3／8項→Level4／8項且流暢並能回應病人家屬提問→Level5</div>
+    <div>系統建議等級：<span class="level-auto" id="autoLevel">—</span>（項目全數獨立執行時可依現場表現手動調整為 Level 5）</div>
+  </div>
+
+  <table class="trust-table">
+    <tr>
+      <td class="section-title" rowspan="3" style="width:8%;">信賴<br>等級</td>
+      <td class="section-title">Level 1</td>
+      <td class="section-title">Level 2</td>
+      <td class="section-title">Level 3</td>
+      <td class="section-title">Level 4</td>
+      <td class="section-title">Level 5</td>
+    </tr>
+    <tr>
+      <td>教師在旁逐步共同操作</td>
+      <td>教師在旁必要時協助</td>
+      <td>教師事後重點確認</td>
+      <td>可獨立執行</td>
+      <td>可指導其他學習者</td>
+    </tr>
+    <tr id="trustPickRow">
+      <td><div class="trust-pick" data-level="1">選擇</div></td>
+      <td><div class="trust-pick" data-level="2">選擇</div></td>
+      <td><div class="trust-pick" data-level="3">選擇</div></td>
+      <td><div class="trust-pick" data-level="4">選擇</div></td>
+      <td><div class="trust-pick" data-level="5">選擇</div></td>
+    </tr>
+  </table>
+
+  <table class="feedback-table">
+    <tr><td class="section-title">5.質性回饋</td></tr>
+    <tr><td>
+      <div class="qual-block"><div class="label">（值得嘉許）</div><textarea id="q1"></textarea></div>
+      <div class="qual-block"><div class="label">（可再精進）</div><textarea id="q2"></textarea></div>
+      <div class="qual-block"><div class="label">（共識行為）</div><textarea id="q3"></textarea></div>
+    </td></tr>
+  </table>
+
+  <div class="siglabel">
+    <div>學員簽章：<input type="text" id="sig_student"></div>
+    <div>臨床教師簽章：<input type="text" id="sig_teacher"></div>
+    <div>日期：<input type="date" id="sig_date"></div>
+  </div>
+</div>
+
+<!-- ---------- 查詢歷史紀錄頁面 ---------- -->
+<div class="sheet" id="searchView" style="display:none;">
+  <div class="formtitle" style="text-align:left;">🔍 查詢歷史紀錄</div>
+  <div class="search-filters">
+    <label>學員姓名<input type="text" id="sf_student" placeholder="關鍵字"></label>
+    <label>教師姓名<input type="text" id="sf_teacher" placeholder="關鍵字"></label>
+    <label>主題<select id="sf_topic"><option value="">全部</option></select></label>
+    <label>期程<select id="sf_term">
+      <option value="">全部</option><option value="三個月">三個月</option>
+      <option value="九個月">九個月</option><option value="十二個月">十二個月</option>
+    </select></label>
+    <label>狀態<select id="sf_status">
+      <option value="">全部</option><option value="草稿">草稿</option><option value="正式">正式</option>
+    </select></label>
+    <label>日期從<input type="date" id="sf_from"></label>
+    <label>日期到<input type="date" id="sf_to"></label>
+  </div>
+  <div style="display:flex; gap:8px; margin-bottom:16px;">
+    <button class="primary" onclick="runSearch()" style="padding:8px 16px; border-radius:8px; border:none; background:var(--accent); color:#fff; font-weight:bold; cursor:pointer;">查詢</button>
+    <button onclick="hideSearchView()" style="padding:8px 16px; border-radius:8px; border:1px solid #ccc; background:#fff; cursor:pointer;">返回填寫</button>
+  </div>
+  <div id="searchResults"></div>
+</div>
+
+<script>
+const API_URL = 'https://script.google.com/macros/s/AKfycbwW4wIm5jndO9wt4ClK0hUf1Y69SRdCqkW6-F_4eaowDew5mIQidOb2grjbhQUb8lSJ/exec';
+
+const RATE_OPTIONS = ["未執行","在旁協助","事後確認","獨立執行"];
+let TOPICS = {};        // code -> {code,title,scenario,items}
+let currentTopicKey = null;
+let ratings = {};        // itemIndex -> 0~3
+let trustLevel = null;
+let currentRecordId = null;
+let currentRecordStatus = null;
+
+// ============================================================
+// 初始化：讀取題庫
+// ============================================================
+async function loadTopicsFromAPI(){
+  try{
+    const res = await fetch(API_URL + '?action=getTopics');
+    const list = await res.json();
+    if(list.error){ alert('讀取題庫失敗：' + list.error); return; }
+    TOPICS = {};
+    list.forEach(t => TOPICS[t.code] = t);
+    populateTopicSelect();
+    populateSearchTopicSelect();
+    const firstKey = Object.keys(TOPICS)[0];
+    if(firstKey) loadTopic(firstKey);
+  }catch(err){
+    alert('無法連線到後台，請確認網路連線後重新整理頁面');
+  }
+}
+
+function populateTopicSelect(){
+  const sel = document.getElementById('topicSelect');
+  sel.innerHTML = '';
+  Object.keys(TOPICS).forEach(key=>{
+    const opt = document.createElement('option');
+    opt.value = key; opt.textContent = TOPICS[key].title;
+    sel.appendChild(opt);
+  });
+  sel.onchange = ()=> loadTopic(sel.value);
+}
+
+function populateSearchTopicSelect(){
+  const sel = document.getElementById('sf_topic');
+  Object.keys(TOPICS).forEach(key=>{
+    const opt = document.createElement('option');
+    opt.value = key; opt.textContent = TOPICS[key].title;
+    sel.appendChild(opt);
+  });
+}
+
+function loadTopic(key){
+  currentTopicKey = key;
+  ratings = {};
+  const topic = TOPICS[key];
+  if(!topic) return;
+  document.getElementById('topicSelect').value = key;
+  document.getElementById('topicTitle').textContent = topic.title;
+  document.getElementById('topicScenario').textContent = topic.scenario;
+
+  const body = document.getElementById('itemsBody');
+  body.innerHTML = '';
+  topic.items.forEach((text, idx)=>{
+    const tr = document.createElement('tr');
+    tr.className = 'item-row';
+    const tdText = document.createElement('td');
+    tdText.textContent = `(${idx+1}) ${text}`;
+    tr.appendChild(tdText);
+
+    const cells = [];
+    RATE_OPTIONS.forEach((label, ri)=>{
+      const td = document.createElement('td');
+      const cell = document.createElement('div');
+      cell.className = 'rate-cell';
+      cell.textContent = label;
+      cell.onclick = ()=>{
+        ratings[idx] = ri;
+        cells.forEach(c=>c.classList.remove('active'));
+        cell.classList.add('active');
+        updateAutoLevel();
+      };
+      td.appendChild(cell);
+      tr.appendChild(td);
+      cells.push(cell);
+    });
+    body.appendChild(tr);
+  });
+  updateAutoLevel();
+}
+
+function updateAutoLevel(){
+  const topic = TOPICS[currentTopicKey];
+  if(!topic) return;
+  const total = topic.items.length;
+  const independentCount = Object.values(ratings).filter(v=>v===3).length;
+  let level = 1;
+  if(independentCount <= 5) level = 1;
+  else if(independentCount === 6) level = 2;
+  else if(independentCount === 7) level = 3;
+  else if(independentCount >= total) level = 4;
+  document.getElementById('autoLevel').textContent =
+    `Level ${level}（獨立執行 ${independentCount}/${total} 項）`;
+  selectTrust(level);
+}
+
+function selectTrust(level){
+  trustLevel = level;
+  document.querySelectorAll('.trust-pick').forEach(el=>{
+    el.classList.toggle('active', Number(el.dataset.level) === level);
+  });
+}
+document.querySelectorAll('.trust-pick').forEach(el=>{
+  el.addEventListener('click', ()=> selectTrust(Number(el.dataset.level)));
+});
+
+// ============================================================
+// 暫存 / 正式送出
+// ============================================================
+function collectFormData(status){
+  const topic = TOPICS[currentTopicKey];
+  const data = {
+    "狀態": status,
+    "填寫日期": document.getElementById('f_date').value,
+    "學員姓名": document.getElementById('f_student').value,
+    "期程": document.getElementById('f_term').value,
+    "教師姓名": document.getElementById('f_teacher').value,
+    "主題代碼": topic.code,
+    "主題名稱": topic.title,
+    "信賴等級": trustLevel ? String(trustLevel) : "",
+    "值得嘉許": document.getElementById('q1').value,
+    "可再精進": document.getElementById('q2').value,
+    "共識行為": document.getElementById('q3').value,
+    "學員簽章": document.getElementById('sig_student').value,
+    "教師簽章": document.getElementById('sig_teacher').value,
+    "簽章日期": document.getElementById('sig_date').value
+  };
+  topic.items.forEach((text, idx)=>{
+    data['評估項目' + (idx+1) + '評分'] = ratings[idx] !== undefined ? RATE_OPTIONS[ratings[idx]] : "";
+  });
+  return data;
+}
+
+async function submitForm(status){
+  if(!currentTopicKey){ alert('題庫尚未載入完成，請稍候再試'); return; }
+  const data = collectFormData(status);
+  if(!data['學員姓名']){ alert('請填寫學員姓名'); return; }
+  try{
+    const res = await fetch(API_URL, {
+      method:'POST',
+      headers: {'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action:'submit', data:data, recordId: currentRecordId })
+    });
+    const result = await res.json();
+    if(result.error){ alert('儲存失敗：' + result.error); return; }
+    currentRecordId = result.recordId;
+    currentRecordStatus = status;
+    showStatusbar();
+    alert(status === '草稿' ? '已暫存草稿' : '已正式送出');
+  }catch(err){
+    alert('連線失敗，請確認網路後再試一次');
+  }
+}
+
+function showStatusbar(){
+  const bar = document.getElementById('statusbar');
+  bar.classList.add('show');
+  document.getElementById('statusbarText').textContent =
+    `目前載入紀錄：${currentRecordId}（${currentRecordStatus}）— 再次送出會更新此筆紀錄`;
+}
+
+function newForm(){
+  currentRecordId = null;
+  currentRecordStatus = null;
+  document.getElementById('statusbar').classList.remove('show');
+  document.getElementById('f_date').value = todayISO();
+  document.getElementById('f_student').value = '';
+  document.getElementById('f_term').value = '';
+  document.getElementById('f_teacher').value = '';
+  document.getElementById('q1').value = '';
+  document.getElementById('q2').value = '';
+  document.getElementById('q3').value = '';
+  document.getElementById('sig_student').value = '';
+  document.getElementById('sig_teacher').value = '';
+  document.getElementById('sig_date').value = todayISO();
+  if(currentTopicKey) loadTopic(currentTopicKey);
+}
+
+function todayISO(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+// ============================================================
+// 查詢歷史紀錄
+// ============================================================
+function showSearchView(){
+  document.getElementById('sheet').style.display = 'none';
+  document.getElementById('statusbar').classList.remove('show');
+  document.getElementById('searchView').style.display = 'block';
+}
+function hideSearchView(){
+  document.getElementById('searchView').style.display = 'none';
+  document.getElementById('sheet').style.display = 'block';
+  if(currentRecordId) showStatusbar();
+}
+
+async function runSearch(){
+  const params = new URLSearchParams({
+    action: 'search',
+    student: document.getElementById('sf_student').value,
+    teacher: document.getElementById('sf_teacher').value,
+    topic: document.getElementById('sf_topic').value,
+    term: document.getElementById('sf_term').value,
+    status: document.getElementById('sf_status').value,
+    dateFrom: document.getElementById('sf_from').value,
+    dateTo: document.getElementById('sf_to').value
+  });
+  const box = document.getElementById('searchResults');
+  box.innerHTML = '<div class="empty-hint">查詢中…</div>';
+  try{
+    const res = await fetch(API_URL + '?' + params.toString());
+    const list = await res.json();
+    if(list.error){ box.innerHTML = `<div class="empty-hint">查詢失敗：${list.error}</div>`; return; }
+    if(!list.length){ box.innerHTML = '<div class="empty-hint">沒有符合條件的紀錄</div>'; return; }
+    box.innerHTML = '';
+    list.forEach(rec=>{
+      const row = document.createElement('div');
+      row.className = 'result-row';
+      const tagClass = rec['狀態'] === '草稿' ? 'draft' : 'final';
+      row.innerHTML = `
+        <div>
+          <b>${rec['學員姓名']||''}</b>　${rec['主題名稱']||''}　
+          <span style="color:#777;">教師：${rec['教師姓名']||''}／${rec['期程']||''}</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="color:#777; font-size:13px;">${rec['填寫日期']||''}</span>
+          <span class="tag ${tagClass}">${rec['狀態']||''}</span>
+        </div>`;
+      row.onclick = ()=> loadRecord(rec['紀錄編號']);
+      box.appendChild(row);
+    });
+  }catch(err){
+    box.innerHTML = '<div class="empty-hint">連線失敗，請稍後再試</div>';
+  }
+}
+
+async function loadRecord(id){
+  try{
+    const res = await fetch(API_URL + '?action=getRecord&id=' + encodeURIComponent(id));
+    const rec = await res.json();
+    if(!rec || rec.error){ alert('讀取紀錄失敗'); return; }
+
+    currentRecordId = rec['紀錄編號'];
+    currentRecordStatus = rec['狀態'];
+
+    loadTopic(rec['主題代碼']);
+    document.getElementById('f_date').value = rec['填寫日期'] || todayISO();
+    document.getElementById('f_student').value = rec['學員姓名'] || '';
+    document.getElementById('f_term').value = rec['期程'] || '';
+    document.getElementById('f_teacher').value = rec['教師姓名'] || '';
+    document.getElementById('q1').value = rec['值得嘉許'] || '';
+    document.getElementById('q2').value = rec['可再精進'] || '';
+    document.getElementById('q3').value = rec['共識行為'] || '';
+    document.getElementById('sig_student').value = rec['學員簽章'] || '';
+    document.getElementById('sig_teacher').value = rec['教師簽章'] || '';
+    document.getElementById('sig_date').value = rec['簽章日期'] || todayISO();
+    ['q1','q2','q3'].forEach(id=> autoGrowTextarea(document.getElementById(id)));
+
+    const topic = TOPICS[rec['主題代碼']];
+    if(topic){
+      topic.items.forEach((text, idx)=>{
+        const label = rec['評估項目' + (idx+1) + '評分'];
+        const ri = RATE_OPTIONS.indexOf(label);
+        if(ri >= 0){
+          ratings[idx] = ri;
+          const row = document.querySelectorAll('#itemsBody .item-row')[idx];
+          const cells = row.querySelectorAll('.rate-cell');
+          cells.forEach(c=>c.classList.remove('active'));
+          cells[ri].classList.add('active');
+        }
+      });
+    }
+    updateAutoLevel(); // 依還原的評分重新計算建議等級文字
+    if(rec['信賴等級']) selectTrust(Number(rec['信賴等級'])); // 但信賴等級以當初教師實際選的為準（可能是主觀判斷的Level5）
+
+    hideSearchView();
+    showStatusbar();
+  }catch(err){
+    alert('讀取紀錄時發生錯誤');
+  }
+}
+
+loadTopicsFromAPI();
+if (new URLSearchParams(window.location.search).get('view') === 'search') {
+  showSearchView();
+}
+
+// ============================================================
+// 文字框依輸入內容自動調整高度（避免列印時被截斷或跳頁跑版）
+// ============================================================
+function autoGrowTextarea(el){
+  el.style.height = 'auto';
+  el.style.height = (el.scrollHeight + 2) + 'px';
+}
+['q1','q2','q3'].forEach(id=>{
+  const el = document.getElementById(id);
+  el.addEventListener('input', ()=> autoGrowTextarea(el));
+});
+window.addEventListener('beforeprint', ()=>{
+  ['q1','q2','q3'].forEach(id=> autoGrowTextarea(document.getElementById(id)));
+});
+
+</script>
+</body>
+</html>
