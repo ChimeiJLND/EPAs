@@ -446,7 +446,11 @@ async function submitForm(status){
     currentRecordId = result.recordId;
     currentRecordStatus = status;
     showStatusbar();
-    alert(status === '草稿' ? '已暫存草稿' : '已正式送出');
+    if(result.status === 'locked_new'){
+      alert('原紀錄已正式送出、不可再修改，系統已改為新增一筆新紀錄（' + result.recordId + '）');
+    } else {
+      alert(status === '草稿' ? '已暫存草稿' : '已正式送出');
+    }
   }catch(err){
     alert('連線失敗，請確認網路後再試一次');
   }
@@ -455,8 +459,11 @@ async function submitForm(status){
 function showStatusbar(){
   const bar = document.getElementById('statusbar');
   bar.classList.add('show');
+  const note = currentRecordStatus === '正式'
+    ? '此紀錄已正式送出、不可覆蓋 — 再次送出會另外新增一筆'
+    : '再次送出會更新此筆紀錄';
   document.getElementById('statusbarText').textContent =
-    `目前載入紀錄：${currentRecordId}（${currentRecordStatus}）— 再次送出會更新此筆紀錄`;
+    `目前載入紀錄：${currentRecordId}（${currentRecordStatus}）— ${note}`;
 }
 
 function newForm(){
