@@ -352,7 +352,14 @@ function populateTopicSelect(){
     opt.value = key; opt.textContent = TOPICS[key].title;
     sel.appendChild(opt);
   });
-  sel.onchange = ()=> loadTopic(sel.value);
+  sel.onchange = ()=> switchTopic(sel.value);
+}
+
+// 手動切換主題下拉選單時，一律視為開始一筆全新的填寫，
+// 避免查詢歷史載入的舊紀錄資料被誤帶到不同主題
+function switchTopic(key){
+  resetFormFields();
+  loadTopic(key);
 }
 
 function populateSearchTopicSelect(){
@@ -522,7 +529,7 @@ function showStatusbar(){
     `目前載入紀錄：${currentRecordId}（${currentRecordStatus}）— ${note}`;
 }
 
-function newForm(){
+function resetFormFields(){
   currentRecordId = null;
   currentRecordStatus = null;
   document.getElementById('statusbar').classList.remove('show');
@@ -536,6 +543,10 @@ function newForm(){
   document.getElementById('sig_student').value = '';
   document.getElementById('sig_teacher').value = '';
   document.getElementById('sig_date').value = todayISO();
+}
+
+function newForm(){
+  resetFormFields();
   if(currentTopicKey) loadTopic(currentTopicKey);
 }
 
