@@ -861,7 +861,7 @@ async function runSearch(){
           </div>
         </div>
         <div style="display:flex; align-items:center; gap:8px;">
-          <span style="color:#777; font-size:13px; text-align:right;">${esc(rec['填寫日期'])}${createdTimeText(rec) ? '<br>新增 ' + esc(createdTimeText(rec)) : ''}</span>
+          <span style="color:#777; font-size:13px; text-align:right;">評估日期 ${esc(rec['填寫日期'])}${createdTimeText(rec) ? '<br>新增 ' + esc(createdTimeText(rec)) : ''}</span>
           <span class="tag ${tagClass}">${esc(rec['狀態'])}</span>
         </div>
         <div class="rr-actions">
@@ -885,13 +885,15 @@ async function runSearch(){
 
 // 取「新增時間」(HH:mm)：優先用建立時間欄；舊資料沒有時，從紀錄編號 EPA-yyyyMMdd-HHmmss-xxx 推回
 function createdTimeText(rec){
-  let m = String(rec['建立時間'] || '').match(/(\d{1,2}):(\d{2})/);
-  if(!m) m = String(rec['紀錄編號'] || '').match(/^EPA-\d{8}-(\d{2})(\d{2})\d{2}-/);
-  return m ? `${m[1].padStart(2,'0')}:${m[2]}` : '';
+  // 優先用紀錄編號內的建立時間（系統以台灣時間產生，不受試算表時區影響），回傳 yyyy-MM-dd HH:mm
+  let m = String(rec['紀錄編號'] || '').match(/^EPA-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})\d{2}-/);
+  if(m) return `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}`;
+  m = String(rec['建立時間'] || '').match(/(\d{4}-\d{2}-\d{2})[ T](\d{1,2}):(\d{2})/);
+  return m ? `${m[1]} ${m[2].padStart(2,'0')}:${m[3]}` : '';
 }
 
 function recordSummaryHtml(rec){
-  return `<div class="kv">編號：${esc(rec['紀錄編號'])}<br>學員：${esc(rec['學員姓名'])}　教師：${esc(rec['教師姓名'])}<br>主題：${esc(rec['主題名稱'])}　日期：${esc(rec['填寫日期'])}${createdTimeText(rec) ? ' ' + esc(createdTimeText(rec)) : ''}<br>狀態：${esc(rec['狀態'])}</div>`;
+  return `<div class="kv">編號：${esc(rec['紀錄編號'])}<br>學員：${esc(rec['學員姓名'])}　教師：${esc(rec['教師姓名'])}<br>主題：${esc(rec['主題名稱'])}　評估日期：${esc(rec['填寫日期'])}${createdTimeText(rec) ? '<br>新增時間：' + esc(createdTimeText(rec)) : ''}<br>狀態：${esc(rec['狀態'])}</div>`;
 }
 
 async function confirmEdit(rec){
