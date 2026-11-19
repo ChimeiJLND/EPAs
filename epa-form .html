@@ -136,6 +136,21 @@
   .modal-actions button.ok.danger{background:#c0392b; border-color:#c0392b;}
   .modal-actions button:disabled{opacity:.45; cursor:not-allowed;}
 
+  /* 登入畫面 */
+  .login-overlay{display:none; position:fixed; inset:0; z-index:80; background:rgba(238,241,244,.97);
+    align-items:center; justify-content:center; padding:16px;}
+  .login-overlay.show{display:flex;}
+  .login-box{background:#fff; width:100%; max-width:380px; border-radius:14px; padding:28px 22px 22px; text-align:center;
+    box-shadow:0 6px 24px rgba(0,0,0,.14);}
+  .login-box h2{font-size:18px; margin-bottom:6px; color:#222;}
+  .login-box .sub{font-size:13px; color:#777; margin-bottom:16px; line-height:1.6;}
+  .login-box input{width:100%; padding:11px 12px; font-size:16px; border:1px solid #bbb; border-radius:8px; text-align:center; letter-spacing:.12em;}
+  .login-box button{width:100%; margin-top:12px; padding:11px; font-size:15px; font-weight:bold; border:none; border-radius:8px;
+    background:var(--accent); color:#fff; cursor:pointer;}
+  .login-box button:disabled{opacity:.55; cursor:not-allowed;}
+  .login-msg{min-height:20px; margin-top:10px; font-size:13px; color:#c0392b; line-height:1.5;}
+  .login-box .help{margin-top:14px; font-size:12px; color:#999; line-height:1.6;}
+
   /* 未填寫提示 */
   .missing{outline:2px solid #e74c3c !important; outline-offset:1px; background-color:#fdecec !important;}
   .item-row.missing td{background:#fdecec !important;}
@@ -167,7 +182,7 @@
   @media print{
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     body{background:#fff;}
-    .toolbar, .statusbar, #searchView, .contact-footer, .loading-overlay, .modal-overlay{display:none !important;}
+    .toolbar, .statusbar, #searchView, .contact-footer, .loading-overlay, .modal-overlay, .login-overlay{display:none !important;}
     .missing, .item-row.missing td{outline:none !important; background:none !important;}
     .sheet{box-shadow:none; margin:0; max-width:100%; padding:0;}
     table, th, td{border:1px solid #000 !important; border-collapse:collapse !important;}
@@ -195,6 +210,7 @@
   <select id="topicSelect"></select>
   <div class="spacer"></div>
   <a class="ghost home-btn" href="index.html">🏠 首頁</a>
+  <button class="ghost" onclick="logout()">登出</button>
   <button class="ghost" onclick="showSearchView()">🔍 查詢歷史</button>
   <button class="secondary" id="btnDraft" onclick="submitForm('草稿')">暫存草稿</button>
   <button class="primary" id="btnFinal" onclick="submitForm('正式')">正式送出</button>
@@ -204,6 +220,17 @@
 <div class="statusbar" id="statusbar">
   <span id="statusbarText"></span>
   <button onclick="newForm()">＋ 開始新填寫</button>
+</div>
+
+<div class="login-overlay" id="loginOverlay">
+  <form class="login-box" onsubmit="doLogin(); return false;" autocomplete="off">
+    <h2>🔒 護理部可信賴評估表單</h2>
+    <div class="sub">請輸入存取碼後使用。<br>存取碼僅供護理部同仁使用，請勿外流。</div>
+    <input type="password" id="loginCode" placeholder="存取碼" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <button type="submit" id="loginBtn">登入</button>
+    <div class="login-msg" id="loginMsg"></div>
+    <div class="help">還沒有存取碼，或忘記存取碼？<br>請洽護理部紫姍　分機 33008／8376</div>
+  </form>
 </div>
 
 <div class="modal-overlay" id="modal">
@@ -364,6 +391,86 @@ async function fetchWithTimeout(url, options={}, timeoutMs=25000){
   }
 }
 
+// ============================================================
+// 登入與帶通行證的API呼叫
+//  存取碼不會出現在這份程式裡：只由使用者輸入、送到後台比對；
+//  後台確認正確才會回傳一組暫時通行證（存在這個分頁的 sessionStorage，關閉分頁就失效）。
+// ============================================================
+let authToken = '';
+let loginResolvers = [];
+function getToken(){
+  if(authToken) return authToken;
+  try{ authToken = sessionStorage.getItem('epa_token') || ''; }catch(e){}
+  return authToken;
+}
+function setToken(t){
+  authToken = t || '';
+  try{ if(t) sessionStorage.setItem('epa_token', t); else sessionStorage.removeItem('epa_token'); }catch(e){}
+}
+function requireLogin(msg){
+  return new Promise(resolve=>{
+    loginResolvers.push(resolve);
+    document.getElementById('loginMsg').textContent = msg || '';
+    document.getElementById('loginOverlay').classList.add('show');
+    setTimeout(()=> document.getElementById('loginCode').focus(), 50);
+  });
+}
+async function doLogin(){
+  const input = document.getElementById('loginCode');
+  const btn = document.getElementById('loginBtn');
+  const msg = document.getElementById('loginMsg');
+  const code = input.value.trim();
+  if(!code){ msg.textContent = '請輸入存取碼'; return; }
+  btn.disabled = true; msg.style.color = '#777'; msg.textContent = '驗證中…';
+  try{
+    const res = await fetchWithTimeout(API_URL, {
+      method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action:'login', code:code })
+    });
+    const r = await res.json();
+    if(r && r.token){
+      setToken(r.token);
+      input.value = '';
+      msg.textContent = '';
+      document.getElementById('loginOverlay').classList.remove('show');
+      const fns = loginResolvers; loginResolvers = [];
+      fns.forEach(f=>f());
+      return;
+    }
+    msg.style.color = '#c0392b';
+    msg.textContent = ((r && (r.message || r.error)) || '登入失敗') +
+      (r && typeof r.remaining === 'number' ? `（還可嘗試 ${r.remaining} 次）` : '');
+    input.value = ''; input.focus();
+  }catch(err){
+    msg.style.color = '#c0392b';
+    msg.textContent = '連線失敗：' + err.message;
+  }finally{
+    btn.disabled = false;
+  }
+}
+function logout(){
+  setToken('');
+  location.href = 'index.html';
+}
+// 所有資料請求都走這裡：自動帶通行證；通行證無效或過期時跳出登入畫面（填寫中的內容不會消失）
+async function callApi(action, payload){
+  const res = await fetchWithTimeout(API_URL, {
+    method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify(Object.assign({}, payload || {}, { action:action, token:getToken() }))
+  });
+  let result;
+  try{ result = await res.json(); }catch(e){ throw new Error('後台回應格式不正確，請稍後再試'); }
+  if(result && !Array.isArray(result) && result.error){
+    if(result.error === 'AUTH'){
+      setToken('');
+      requireLogin('登入已逾時或尚未登入，請重新輸入存取碼（您填寫中的內容不會消失）');
+      const e = new Error('AUTH'); e.code = 'AUTH'; throw e;
+    }
+    throw new Error(result.message || result.error);
+  }
+  return result;
+}
+
 const RATE_OPTIONS = ["未執行","在旁協助","事後確認","獨立執行"];
 let TOPICS = {};        // code -> {code,title,scenario,items}
 let currentTopicKey = null;
@@ -423,9 +530,7 @@ function showModal(opts){
 async function loadTopicsFromAPI(){
   showLoading('讀取題庫中…');
   try{
-    const res = await fetchWithTimeout(API_URL + '?action=getTopics');
-    const list = await res.json();
-    if(list.error){ alert('讀取題庫失敗：' + list.error); return; }
+    const list = await callApi('getTopics');
     TOPICS = {};
     list.forEach(t => TOPICS[t.code] = t);
     populateTopicSelect();
@@ -433,6 +538,7 @@ async function loadTopicsFromAPI(){
     const firstKey = Object.keys(TOPICS)[0];
     if(firstKey) loadTopic(firstKey);
   }catch(err){
+    if(err.code === 'AUTH'){ loginResolvers.push(()=> loadTopicsFromAPI()); return; }
     alert('無法連線到後台：' + err.message);
   }finally{
     hideLoading();
@@ -638,13 +744,7 @@ async function submitForm(status){
   btnDraft.disabled = true; btnFinal.disabled = true;
   showLoading(status === '草稿' ? '暫存中…' : '送出中…');
   try{
-    const res = await fetchWithTimeout(API_URL, {
-      method:'POST',
-      headers: {'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({ action:'submit', data:data, recordId: currentRecordId, editFinal: editingFinal })
-    });
-    const result = await res.json();
-    if(result.error){ alert('儲存失敗：' + result.error); return; }
+    const result = await callApi('submit', { data:data, recordId: currentRecordId, editFinal: editingFinal });
     currentRecordId = result.recordId;
     currentRecordStatus = status;
     showStatusbar();
@@ -656,7 +756,7 @@ async function submitForm(status){
       alert(status === '草稿' ? '已暫存草稿' : '已正式送出');
     }
   }catch(err){
-    alert('儲存失敗：' + err.message);
+    if(err.code !== 'AUTH') alert('儲存失敗：' + err.message);
   }finally{
     btnDraft.disabled = false; btnFinal.disabled = false;
     hideLoading();
@@ -729,8 +829,7 @@ function hideSearchView(){
 }
 
 async function runSearch(){
-  const params = new URLSearchParams({
-    action: 'search',
+  const params = {
     id: document.getElementById('sf_id').value.trim(),
     student: document.getElementById('sf_student').value,
     teacher: document.getElementById('sf_teacher').value,
@@ -739,16 +838,14 @@ async function runSearch(){
     status: document.getElementById('sf_status').value,
     dateFrom: document.getElementById('sf_from').value,
     dateTo: document.getElementById('sf_to').value
-  });
+  };
   const box = document.getElementById('searchResults');
   const btnSearch = document.getElementById('btnSearch');
   box.innerHTML = '<div class="empty-hint">查詢中…</div>';
   btnSearch.disabled = true;
   showLoading('查詢中…');
   try{
-    const res = await fetchWithTimeout(API_URL + '?' + params.toString());
-    const list = await res.json();
-    if(list.error){ box.innerHTML = `<div class="empty-hint">查詢失敗：${list.error}</div>`; return; }
+    const list = await callApi('search', params);
     if(!list.length){ box.innerHTML = '<div class="empty-hint">沒有符合條件的紀錄</div>'; return; }
     box.innerHTML = '';
     list.forEach(rec=>{
@@ -779,7 +876,7 @@ async function runSearch(){
       box.appendChild(row);
     });
   }catch(err){
-    box.innerHTML = `<div class="empty-hint">連線失敗：${err.message}</div>`;
+    box.innerHTML = err.code === 'AUTH' ? '<div class="empty-hint">請先登入後再查詢</div>' : `<div class="empty-hint">連線失敗：${esc(err.message)}</div>`;
   }finally{
     btnSearch.disabled = false;
     hideLoading();
@@ -820,17 +917,12 @@ async function confirmDelete(rec){
   if(!ok) return;
   showLoading('刪除中…');
   try{
-    const res = await fetchWithTimeout(API_URL, {
-      method:'POST',
-      headers: {'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({ action:'delete', recordId: rec['紀錄編號'] })
-    });
-    const result = await res.json();
-    if(result.error){ alert('刪除失敗：' + result.error); return; }
+    await callApi('delete', { recordId: rec['紀錄編號'] });
     if(currentRecordId === rec['紀錄編號']) resetFormFields();
     alert('已刪除');
   }catch(err){
-    alert('刪除失敗：' + err.message);
+    if(err.code !== 'AUTH') alert('刪除失敗：' + err.message);
+    return;
   }finally{
     hideLoading();
   }
@@ -840,9 +932,8 @@ async function confirmDelete(rec){
 async function loadRecord(id, mode){
   showLoading('讀取紀錄中…');
   try{
-    const res = await fetchWithTimeout(API_URL + '?action=getRecord&id=' + encodeURIComponent(id));
-    const rec = await res.json();
-    if(!rec || rec.error){ alert('讀取紀錄失敗'); return; }
+    const rec = await callApi('getRecord', { id:id });
+    if(!rec){ alert('讀取紀錄失敗：找不到這筆紀錄（可能已被刪除）'); return; }
 
     loadTopic(rec['主題代碼']);
     currentRecordId = rec['紀錄編號'];
@@ -888,7 +979,7 @@ async function loadRecord(id, mode){
     showStatusbar();
     window.scrollTo({top:0});
   }catch(err){
-    alert('讀取紀錄失敗：' + err.message);
+    if(err.code !== 'AUTH') alert('讀取紀錄失敗：' + err.message);
   }finally{
     hideLoading();
   }
@@ -898,7 +989,10 @@ async function loadRecord(id, mode){
 document.getElementById('f_date').value = todayISO();
 document.getElementById('sig_date').value = todayISO();
 
-loadTopicsFromAPI();
+(async function init(){
+  if(!getToken()) await requireLogin('');
+  loadTopicsFromAPI();
+})();
 if (new URLSearchParams(window.location.search).get('view') === 'search') {
   showSearchView();
 }
