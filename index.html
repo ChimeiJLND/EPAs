@@ -110,6 +110,38 @@
   .result-row .tag.final{background:#d4edda; color:#155724;}
   .empty-hint{color:#999; font-size:14px; text-align:center; padding:20px 0;}
 
+  /* 查詢結果列：編號＋操作按鈕 */
+  .result-row .rr-main{flex:1 1 260px; min-width:0;}
+  .rec-no{display:inline-block; font-family:Consolas,Menlo,monospace; font-size:12px; color:var(--accent);
+    background:var(--accent-light); border-radius:4px; padding:1px 6px; margin-bottom:4px; word-break:break-all;}
+  .rr-actions{display:flex; gap:6px; flex:0 0 auto; width:100%; justify-content:flex-end;}
+  .rr-actions button{font-size:13px; padding:6px 12px; border-radius:6px; border:1px solid #ccc; background:#fff; cursor:pointer;}
+  .rr-actions button.edit{border-color:#e0c46c; background:#fff3cd;}
+  .rr-actions button.del{border-color:#e3a7a7; background:#fdecec; color:#b42318;}
+
+  /* 確認視窗 */
+  .modal-overlay{display:none; position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.45);
+    align-items:center; justify-content:center; padding:16px;}
+  .modal-overlay.show{display:flex;}
+  .modal-box{background:#fff; border-radius:12px; max-width:420px; width:100%; padding:20px; box-shadow:0 6px 24px rgba(0,0,0,.25); max-height:90vh; overflow:auto;}
+  .modal-title{font-weight:bold; font-size:17px; margin-bottom:10px;}
+  .modal-body{font-size:14px; line-height:1.7; color:#333;}
+  .modal-body ul{margin:6px 0 0 18px; padding:0;}
+  .modal-body .kv{background:#f7f7f7; border-radius:8px; padding:8px 12px; margin:8px 0; font-size:13px;}
+  .modal-input{width:100%; margin-top:10px; padding:8px 10px; font-size:15px; border:1px solid #bbb; border-radius:8px;}
+  .modal-actions{display:flex; gap:10px; justify-content:flex-end; margin-top:16px;}
+  .modal-actions button{font-size:14px; padding:9px 18px; border-radius:8px; border:1px solid #ccc; background:#fff; cursor:pointer;}
+  .modal-actions button.ok{background:var(--accent); color:#fff; border-color:var(--accent); font-weight:bold;}
+  .modal-actions button.ok.danger{background:#c0392b; border-color:#c0392b;}
+  .modal-actions button:disabled{opacity:.45; cursor:not-allowed;}
+
+  /* 未填寫提示 */
+  .missing{outline:2px solid #e74c3c !important; outline-offset:1px; background-color:#fdecec !important;}
+  .item-row.missing td{background:#fdecec !important;}
+
+  /* 檢視模式：不可編輯，只能看與列印 */
+  #sheet.view-only{pointer-events:none;}
+
   .loading-overlay{
     display:none; position:fixed; inset:0; z-index:50;
     background:rgba(255,255,255,.72); align-items:center; justify-content:center;
@@ -134,7 +166,8 @@
   @media print{
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     body{background:#fff;}
-    .toolbar, .statusbar, #searchView, .contact-footer, .loading-overlay{display:none !important;}
+    .toolbar, .statusbar, #searchView, .contact-footer, .loading-overlay, .modal-overlay{display:none !important;}
+    .missing, .item-row.missing td{outline:none !important; background:none !important;}
     .sheet{box-shadow:none; margin:0; max-width:100%; padding:0;}
     table, th, td{border:1px solid #000 !important; border-collapse:collapse !important;}
     .table-scroll{overflow:visible !important;}
@@ -169,6 +202,18 @@
 <div class="statusbar" id="statusbar">
   <span id="statusbarText"></span>
   <button onclick="newForm()">＋ 開始新填寫</button>
+</div>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal-box">
+    <div class="modal-title" id="modalTitle"></div>
+    <div class="modal-body" id="modalBody"></div>
+    <input class="modal-input" id="modalInput" style="display:none;" autocomplete="off">
+    <div class="modal-actions">
+      <button id="modalCancel">取消</button>
+      <button class="ok" id="modalOk">確定</button>
+    </div>
+  </div>
 </div>
 
 <div class="loading-overlay" id="loadingOverlay">
@@ -264,6 +309,7 @@
   <div class="formtitle" style="text-align:left;">🔍 查詢歷史紀錄</div>
   <div class="retention-notice">系統僅保留自評估日期起 1 年內的資料，超過 1 年將不予保留，如有查詢或列印需求請於期限內完成。</div>
   <div class="search-filters">
+    <label>紀錄編號<input type="text" id="sf_id" placeholder="例：EPA-2026…"></label>
     <label>學員姓名<input type="text" id="sf_student" placeholder="關鍵字"></label>
     <label>教師姓名<input type="text" id="sf_teacher" placeholder="關鍵字"></label>
     <label>主題<select id="sf_topic"><option value="">全部</option></select></label>
@@ -322,6 +368,51 @@ let ratings = {};        // itemIndex -> 0~3
 let trustLevel = null;
 let currentRecordId = null;
 let currentRecordStatus = null;
+let viewMode = false;      // true＝檢視模式（不可編輯，只能看與列印）
+let editingFinal = false;  // true＝正在修改一筆已正式送出的紀錄（送出時才允許覆蓋）
+
+function esc(v){
+  return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ============================================================
+// 共用：確認／提示視窗（回傳 Promise<boolean>）
+//  opts: title, html, okText, cancelText(null＝只顯示一顆按鈕), danger, requireText(需輸入此字樣才能按確定)
+// ============================================================
+function showModal(opts){
+  return new Promise(resolve=>{
+    const modal = document.getElementById('modal');
+    const ok = document.getElementById('modalOk');
+    const cancel = document.getElementById('modalCancel');
+    const input = document.getElementById('modalInput');
+    document.getElementById('modalTitle').textContent = opts.title || '';
+    document.getElementById('modalBody').innerHTML = opts.html || '';
+    ok.textContent = opts.okText || '確定';
+    ok.classList.toggle('danger', !!opts.danger);
+    cancel.style.display = opts.cancelText === null ? 'none' : '';
+    cancel.textContent = opts.cancelText || '取消';
+    if(opts.requireText){
+      input.style.display = 'block';
+      input.value = '';
+      input.placeholder = `請輸入「${opts.requireText}」以確認`;
+      ok.disabled = true;
+      input.oninput = ()=>{ ok.disabled = input.value.trim() !== opts.requireText; };
+    } else {
+      input.style.display = 'none';
+      input.oninput = null;
+      ok.disabled = false;
+    }
+    const close = (val)=>{
+      modal.classList.remove('show');
+      ok.onclick = cancel.onclick = null;
+      resolve(val);
+    };
+    ok.onclick = ()=> close(true);
+    cancel.onclick = ()=> close(false);
+    modal.classList.add('show');
+    if(opts.requireText) setTimeout(()=>input.focus(), 50);
+  });
+}
 
 // ============================================================
 // 初始化：讀取題庫
@@ -408,6 +499,7 @@ function loadTopic(key){
       cell.className = 'rate-cell';
       cell.textContent = label;
       cell.onclick = ()=>{
+        tr.classList.remove('missing');
         ratings[idx] = ri;
         cells.forEach(c=>c.classList.remove('active'));
         cell.classList.add('active');
@@ -489,10 +581,55 @@ function collectFormData(status){
   return data;
 }
 
+// 正式送出前的必填檢查。要調整哪些欄位必填，改這裡就好；暫存草稿只要求學員姓名。
+function validateForm(){
+  const topic = TOPICS[currentTopicKey];
+  const missing = [];   // {label, el}
+  const need = (id, label)=>{
+    const el = document.getElementById(id);
+    if(!String(el.value || '').trim()) missing.push({label, el});
+  };
+  need('f_date','日期');
+  need('f_student','學員姓名');
+  need('f_term','期程');
+  need('f_teacher','教師姓名');
+  if(topic.scenarioEditable) need('topicScenarioInput','情境');
+  topic.items.forEach((text, idx)=>{
+    if(ratings[idx] === undefined){
+      const row = document.querySelectorAll('#itemsBody .item-row')[idx];
+      missing.push({label:`評估項目(${idx+1}) ${text}`, el:row});
+    }
+  });
+  if(!trustLevel) missing.push({label:'信賴等級', el:document.querySelector('.trust-table')});
+  need('q1','質性回饋：值得嘉許');
+  need('q2','質性回饋：可再精進');
+  need('q3','質性回饋：共識行為');
+  need('sig_student','學員簽章');
+  need('sig_teacher','臨床教師簽章');
+  need('sig_date','簽章日期');
+  return missing;
+}
+
 async function submitForm(status){
+  if(viewMode){ return; }
   if(!currentTopicKey){ alert('題庫尚未載入完成，請稍候再試'); return; }
   const data = collectFormData(status);
-  if(!data['學員姓名']){ alert('請填寫學員姓名'); return; }
+  document.querySelectorAll('.missing').forEach(e=>e.classList.remove('missing'));
+  if(status === '草稿'){
+    if(!data['學員姓名']){ alert('暫存草稿至少需要填寫學員姓名'); document.getElementById('f_student').classList.add('missing'); return; }
+  } else {
+    const missing = validateForm();
+    if(missing.length){
+      missing.forEach(m => m.el.classList.add('missing'));
+      missing[0].el.scrollIntoView({behavior:'smooth', block:'center'});
+      await showModal({
+        title:`還有 ${missing.length} 項未填寫，無法正式送出`,
+        html:'<ul>' + missing.map(m=>`<li>${esc(m.label)}</li>`).join('') + '</ul><div style="margin-top:8px;color:#888;font-size:12.5px;">未填寫處已用紅色標示；若想先保留進度，可以按「暫存草稿」。</div>',
+        okText:'我知道了', cancelText:null
+      });
+      return;
+    }
+  }
   const btnDraft = document.getElementById('btnDraft');
   const btnFinal = document.getElementById('btnFinal');
   btnDraft.disabled = true; btnFinal.disabled = true;
@@ -501,7 +638,7 @@ async function submitForm(status){
     const res = await fetchWithTimeout(API_URL, {
       method:'POST',
       headers: {'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({ action:'submit', data:data, recordId: currentRecordId })
+      body: JSON.stringify({ action:'submit', data:data, recordId: currentRecordId, editFinal: editingFinal })
     });
     const result = await res.json();
     if(result.error){ alert('儲存失敗：' + result.error); return; }
@@ -510,6 +647,8 @@ async function submitForm(status){
     showStatusbar();
     if(result.status === 'locked_new'){
       alert('原紀錄已正式送出、不可再修改，系統已改為新增一筆新紀錄（' + result.recordId + '）');
+    } else if(editingFinal){
+      alert('已更新這筆紀錄');
     } else {
       alert(status === '草稿' ? '已暫存草稿' : '已正式送出');
     }
@@ -521,12 +660,21 @@ async function submitForm(status){
   }
 }
 
+function updateToolbarButtons(){
+  const inSearch = document.getElementById('searchView').style.display === 'block';
+  document.getElementById('btnDraft').style.display = (inSearch || viewMode || editingFinal) ? 'none' : '';
+  document.getElementById('btnFinal').style.display = (inSearch || viewMode) ? 'none' : '';
+  document.getElementById('sheet').classList.toggle('view-only', viewMode);
+}
+
 function showStatusbar(){
   const bar = document.getElementById('statusbar');
   bar.classList.add('show');
-  const note = currentRecordStatus === '正式'
-    ? '此紀錄已正式送出、不可覆蓋 — 再次送出會另外新增一筆'
-    : '再次送出會更新此筆紀錄';
+  let note;
+  if(viewMode) note = '檢視模式，僅供查看與列印；如需變更請回「查詢歷史」按「修改」';
+  else if(editingFinal) note = '修改模式，按「正式送出」會覆蓋原內容';
+  else if(currentRecordStatus === '正式') note = '此紀錄已正式送出 — 再次送出會另外新增一筆';
+  else note = '再次送出會更新此筆紀錄';
   document.getElementById('statusbarText').textContent =
     `目前載入紀錄：${currentRecordId}（${currentRecordStatus}）— ${note}`;
 }
@@ -534,6 +682,10 @@ function showStatusbar(){
 function resetFormFields(){
   currentRecordId = null;
   currentRecordStatus = null;
+  viewMode = false;
+  editingFinal = false;
+  document.querySelectorAll('.missing').forEach(e=>e.classList.remove('missing'));
+  updateToolbarButtons();
   document.getElementById('statusbar').classList.remove('show');
   document.getElementById('f_date').value = todayISO();
   document.getElementById('f_student').value = '';
@@ -564,20 +716,19 @@ function showSearchView(){
   document.getElementById('sheet').style.display = 'none';
   document.getElementById('statusbar').classList.remove('show');
   document.getElementById('searchView').style.display = 'block';
-  document.getElementById('btnDraft').style.display = 'none';
-  document.getElementById('btnFinal').style.display = 'none';
+  updateToolbarButtons();
 }
 function hideSearchView(){
   document.getElementById('searchView').style.display = 'none';
   document.getElementById('sheet').style.display = 'block';
-  document.getElementById('btnDraft').style.display = '';
-  document.getElementById('btnFinal').style.display = '';
+  updateToolbarButtons();
   if(currentRecordId) showStatusbar();
 }
 
 async function runSearch(){
   const params = new URLSearchParams({
     action: 'search',
+    id: document.getElementById('sf_id').value.trim(),
     student: document.getElementById('sf_student').value,
     teacher: document.getElementById('sf_teacher').value,
     topic: document.getElementById('sf_topic').value,
@@ -602,15 +753,26 @@ async function runSearch(){
       row.className = 'result-row';
       const tagClass = rec['狀態'] === '草稿' ? 'draft' : 'final';
       row.innerHTML = `
-        <div>
-          <b>${rec['學員姓名']||''}</b>　${rec['主題名稱']||''}　
-          <span style="color:#777;">教師：${rec['教師姓名']||''}／${rec['期程']||''}</span>
+        <div class="rr-main">
+          <div class="rec-no">編號 ${esc(rec['紀錄編號'])}</div>
+          <div>
+            <b>${esc(rec['學員姓名'])}</b>　${esc(rec['主題名稱'])}　
+            <span style="color:#777;">教師：${esc(rec['教師姓名'])}／${esc(rec['期程'])}</span>
+          </div>
         </div>
         <div style="display:flex; align-items:center; gap:8px;">
-          <span style="color:#777; font-size:13px;">${rec['填寫日期']||''}</span>
-          <span class="tag ${tagClass}">${rec['狀態']||''}</span>
+          <span style="color:#777; font-size:13px;">${esc(rec['填寫日期'])}</span>
+          <span class="tag ${tagClass}">${esc(rec['狀態'])}</span>
+        </div>
+        <div class="rr-actions">
+          <button class="view">檢視／列印</button>
+          <button class="edit">修改</button>
+          <button class="del">刪除</button>
         </div>`;
-      row.onclick = ()=> loadRecord(rec['紀錄編號']);
+      row.onclick = ()=> loadRecord(rec['紀錄編號'], 'view');
+      row.querySelector('.view').onclick = (e)=>{ e.stopPropagation(); loadRecord(rec['紀錄編號'], 'view'); };
+      row.querySelector('.edit').onclick = (e)=>{ e.stopPropagation(); confirmEdit(rec); };
+      row.querySelector('.del').onclick  = (e)=>{ e.stopPropagation(); confirmDelete(rec); };
       box.appendChild(row);
     });
   }catch(err){
@@ -621,17 +783,63 @@ async function runSearch(){
   }
 }
 
-async function loadRecord(id){
+function recordSummaryHtml(rec){
+  return `<div class="kv">編號：${esc(rec['紀錄編號'])}<br>學員：${esc(rec['學員姓名'])}　教師：${esc(rec['教師姓名'])}<br>主題：${esc(rec['主題名稱'])}　日期：${esc(rec['填寫日期'])}<br>狀態：${esc(rec['狀態'])}</div>`;
+}
+
+async function confirmEdit(rec){
+  const isFinal = rec['狀態'] === '正式';
+  const ok = await showModal({
+    title:'你確定要修改這筆紀錄嗎？',
+    html: recordSummaryHtml(rec) + (isFinal
+      ? '這筆紀錄<b>已正式送出</b>，修改後重新送出會<b>直接覆蓋原本的內容</b>。'
+      : '這是草稿，修改後可再暫存或正式送出。'),
+    okText:'確定修改'
+  });
+  if(ok) loadRecord(rec['紀錄編號'], 'edit');
+}
+
+async function confirmDelete(rec){
+  const isFinal = rec['狀態'] === '正式';
+  const ok = await showModal({
+    title:'你確定要刪除這筆紀錄嗎？',
+    html: recordSummaryHtml(rec) + '刪除後這筆紀錄將<b>不會再出現在查詢結果中</b>。' + (isFinal ? '<br><span style="color:#b42318;">這是已正式送出的紀錄，請特別確認。</span>' : ''),
+    okText:'確定刪除', danger:true,
+    requireText: isFinal ? '刪除' : null
+  });
+  if(!ok) return;
+  showLoading('刪除中…');
+  try{
+    const res = await fetchWithTimeout(API_URL, {
+      method:'POST',
+      headers: {'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action:'delete', recordId: rec['紀錄編號'] })
+    });
+    const result = await res.json();
+    if(result.error){ alert('刪除失敗：' + result.error); return; }
+    if(currentRecordId === rec['紀錄編號']) resetFormFields();
+    alert('已刪除');
+  }catch(err){
+    alert('刪除失敗：' + err.message);
+  }finally{
+    hideLoading();
+  }
+  runSearch();
+}
+
+async function loadRecord(id, mode){
   showLoading('讀取紀錄中…');
   try{
     const res = await fetchWithTimeout(API_URL + '?action=getRecord&id=' + encodeURIComponent(id));
     const rec = await res.json();
     if(!rec || rec.error){ alert('讀取紀錄失敗'); return; }
 
+    loadTopic(rec['主題代碼']);
     currentRecordId = rec['紀錄編號'];
     currentRecordStatus = rec['狀態'];
-
-    loadTopic(rec['主題代碼']);
+    viewMode = (mode === 'view');
+    editingFinal = (mode === 'edit' && rec['狀態'] === '正式');
+    document.querySelectorAll('.missing').forEach(e=>e.classList.remove('missing'));
     if(TOPICS[rec['主題代碼']] && TOPICS[rec['主題代碼']].scenarioEditable && rec['情境內容']){
       const si = document.getElementById('topicScenarioInput');
       si.value = rec['情境內容'];
@@ -668,12 +876,17 @@ async function loadRecord(id){
 
     hideSearchView();
     showStatusbar();
+    window.scrollTo({top:0});
   }catch(err){
     alert('讀取紀錄失敗：' + err.message);
   }finally{
     hideLoading();
   }
 }
+
+// 日期欄位預設為今天
+document.getElementById('f_date').value = todayISO();
+document.getElementById('sig_date').value = todayISO();
 
 loadTopicsFromAPI();
 if (new URLSearchParams(window.location.search).get('view') === 'search') {
@@ -690,6 +903,9 @@ function autoGrowTextarea(el){
 ['q1','q2','q3','topicScenarioInput'].forEach(id=>{
   const el = document.getElementById(id);
   el.addEventListener('input', ()=> autoGrowTextarea(el));
+});
+['input','change'].forEach(evt=>{
+  document.getElementById('sheet').addEventListener(evt, e=> e.target.classList && e.target.classList.remove('missing'));
 });
 window.addEventListener('beforeprint', ()=>{
   ['q1','q2','q3','topicScenarioInput'].forEach(id=> autoGrowTextarea(document.getElementById(id)));
